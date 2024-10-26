@@ -71,7 +71,7 @@
     )
     (and
         (>= current-block-height (get proposal-start-block proposal-data))
-        (< current-block-height (+ (get proposal-start-block proposal-data) PROPOSAL_VOTING_PERIOD_BLOCKS))
+        (< current-block-height (+ (get proposal-start-block proposal-data) PROPOSAL-VOTING-PERIOD-BLOCKS))
         (not (get proposal-executed proposal-data))
     ))
 )
@@ -81,8 +81,8 @@
         (combined-vote-count (+ total-yes-votes total-no-votes))
     )
     (and
-        (>= combined-vote-count PROPOSAL_QUORUM_THRESHOLD)
-        (>= (* total-yes-votes u1000) (* PROPOSAL_APPROVAL_THRESHOLD combined-vote-count))
+        (>= combined-vote-count PROPOSAL-QUORUM-THRESHOLD)
+        (>= (* total-yes-votes u1000) (* PROPOSAL-APPROVAL-THRESHOLD combined-vote-count))
     ))
 )
 
@@ -103,7 +103,7 @@
 (define-public (submit-new-proposal (requested-amount uint) (funds-recipient principal) (proposal-description (string-utf8 256)))
     (let (
         (proposal-identifier (var-get total-proposals-count))
-        (proposal-deposit (try! (stx-transfer? MINIMUM_PROPOSAL_DEPOSIT tx-sender (as-contract tx-sender))))
+        (proposal-deposit (try! (stx-transfer? MINIMUM-PROPOSAL-DEPOSIT tx-sender (as-contract tx-sender))))
     )
     (begin
         (asserts! (>= requested-amount u0) ERROR-INVALID-TRANSACTION-AMOUNT)
@@ -118,7 +118,7 @@
             total-no-votes: u0,
             proposal-start-block: block-height,
             proposal-executed: false,
-            proposal-deposit-amount: MINIMUM_PROPOSAL_DEPOSIT
+            proposal-deposit-amount: MINIMUM-PROPOSAL-DEPOSIT
         })
         
         (var-set total-proposals-count (+ proposal-identifier u1))
@@ -191,12 +191,13 @@
     ))
 
 ;; Emergency functions
+;; Emergency functions
 (define-public (emergency-treasury-shutdown)
     (begin
         (asserts! (is-eq tx-sender (var-get treasury-administrator)) ERROR-UNAUTHORIZED-ACCESS)
-        (as-contract (stx-transfer? (var-get total-treasury-balance)
+        (try! (as-contract (stx-transfer? (var-get total-treasury-balance)
                                   tx-sender
-                                  (var-get treasury-administrator)))
+                                  (var-get treasury-administrator))))
         (var-set total-treasury-balance u0)
         (ok true)
     ))
