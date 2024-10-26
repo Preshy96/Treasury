@@ -10,12 +10,15 @@
 (define-constant ERROR-MEMBER-ALREADY-VOTED (err u104))
 (define-constant ERROR-PROPOSAL-VOTING-PERIOD-ENDED (err u105))
 (define-constant ERROR-MINIMUM-PROPOSAL-DEPOSIT-NOT-MET (err u106))
+(define-constant ERROR-INVALID-RECIPIENT (err u107))
+(define-constant ERROR-INVALID-DESCRIPTION (err u108))
+(define-constant ERROR-INVALID-ADMIN (err u109))
 
 ;; Constants
-(define-constant PROPOSAL-VOTING-PERIOD-BLOCKS u10000) ;; Number of blocks proposal stays active
-(define-constant MINIMUM-PROPOSAL-DEPOSIT u1000000) ;; Minimum deposit in microSTX
-(define-constant PROPOSAL-QUORUM-THRESHOLD u500) ;; 50% of total votes needed
-(define-constant PROPOSAL-APPROVAL-THRESHOLD u510) ;; 51% yes votes needed for approval
+(define-constant PROPOSAL-VOTING-PERIOD-BLOCKS u10000)
+(define-constant MINIMUM-PROPOSAL-DEPOSIT u1000000)
+(define-constant PROPOSAL-QUORUM-THRESHOLD u500)
+(define-constant PROPOSAL-APPROVAL-THRESHOLD u510)
 
 ;; Data vars
 (define-data-var total-treasury-balance uint u0)
@@ -86,6 +89,24 @@
     ))
 )
 
+(define-private (is-valid-recipient (recipient principal))
+    (and
+        (not (is-eq recipient (as-contract tx-sender)))  ;; Can't send to contract itself
+        (not (is-eq recipient tx-sender))               ;; Can't send to self
+        true                                            ;; Add additional checks as needed
+    )
+)
+
+(define-private (is-valid-description (description (string-utf8 256)))
+    (let ((description-len (len description)))
+        (and
+            (> description-len u0)           ;; Not empty
+            (<= description-len u256)        ;; Within size limit
+            true                            ;; Add additional checks as needed
+        )
+    )
+)
+
 ;; Public functions
 (define-public (deposit-funds)
     (let (
@@ -103,12 +124,18 @@
 (define-public (submit-new-proposal (requested-amount uint) (funds-recipient principal) (proposal-description (string-utf8 256)))
     (let (
         (proposal-identifier (var-get total-proposals-count))
-        (proposal-deposit (try! (stx-transfer? MINIMUM-PROPOSAL-DEPOSIT tx-sender (as-contract tx-sender))))
     )
     (begin
+        ;; Input validation
+        (asserts! (is-valid-recipient funds-recipient) ERROR-INVALID-RECIPIENT)
+        (asserts! (is-valid-description proposal-description) ERROR-INVALID-DESCRIPTION)
         (asserts! (>= requested-amount u0) ERROR-INVALID-TRANSACTION-AMOUNT)
         (asserts! (<= requested-amount (var-get total-treasury-balance)) ERROR-INSUFFICIENT-TREASURY-BALANCE)
         
+        ;; Process deposit
+        (try! (stx-transfer? MINIMUM-PROPOSAL-DEPOSIT tx-sender (as-contract tx-sender)))
+        
+        ;; Create proposal
         (map-set treasury-proposals proposal-identifier {
             proposal-creator: tx-sender,
             requested-amount: requested-amount,
@@ -186,11 +213,11 @@
 (define-public (transfer-admin-rights (new-administrator principal))
     (begin
         (asserts! (is-eq tx-sender (var-get treasury-administrator)) ERROR-UNAUTHORIZED-ACCESS)
+        (asserts! (not (is-eq new-administrator (as-contract tx-sender))) ERROR-INVALID-ADMIN)
         (var-set treasury-administrator new-administrator)
         (ok true)
     ))
 
-;; Emergency functions
 ;; Emergency functions
 (define-public (emergency-treasury-shutdown)
     (begin
